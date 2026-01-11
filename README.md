@@ -1,80 +1,159 @@
-![Build and Deploy Full Stack ChatPDF Clone](https://github.com/Elliott-Chong/chatpdf-yt/assets/77007117/7fcee290-ca52-46ee-ae82-3490f505270b)
+# 🚀 DocuDialog
 
-[Link to YouTube Tutorial](https://www.youtube.com/watch?v=bZFedu-0emE)
+**Chat with Your PDFs. Instantly. Intelligently. Securely.**
 
-# Overview
+DocuDialog is an AI-powered SaaS application that lets users upload PDFs and interact with them conversationally. Whether it’s study material, documentation, research papers, or contracts — DocuDialog turns static PDFs into interactive knowledge companions.
 
-Welcome to the "chatpdf-yt" project, a comprehensive chat application with PDF integration. This project is designed to provide a seamless chat experience where users can upload PDF files, create chats around them, and interact with an AI assistant. The AI assistant uses the OpenAI API to generate responses based on the chat context. The application also includes a subscription feature, where users can subscribe to access premium features. The subscription process is handled using Stripe for payments and webhooks for event processing.
+Built with a **production-grade tech stack**, strong **security practices**, and a **clean developer workflow**.
 
-hi this is a test change!
+---
 
-# Technologies and Frameworks
+![Next.js](https://img.shields.io/badge/Next.js-14-black)
+![TypeScript](https://img.shields.io/badge/TypeScript-blue)
+![OpenAI](https://img.shields.io/badge/OpenAI-API-green)
+![AWS S3](https://img.shields.io/badge/AWS-S3-orange)
+![Pinecone](https://img.shields.io/badge/Pinecone-VectorDB-purple)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Neon-blue)
+![Clerk](https://img.shields.io/badge/Auth-Clerk-red)
+![Stripe](https://img.shields.io/badge/Payments-Stripe-indigo)
 
-- Next.js
-- React
-- TypeScript
-- Tailwind CSS
-- Clerk
-- Drizzle ORM
-- PostgreSQL
-- AWS SDK
-- OpenAI API
-- Stripe
-- Axios
-- Pinecone
-- Drizzle-kit
-- OpenAI Edge
-- Neon Database Serverless
-- Drizzle-orm/neon-http
-- @tanstack/react-query
-- @clerk/nextjs
-- clsx
-- tailwind-merge
+## ✨ Key Features
 
-# Installation
+* 📄 **Upload & Chat with PDFs**
+  Ask questions, summarize content, and extract insights from your documents.
 
-Follow the steps below to install and setup the project:
+* 🧠 **AI-Powered Understanding**
+  Uses advanced language models + vector search for accurate, context-aware responses.
 
-1. **Clone the repository**
+* ☁️ **Secure File Storage (AWS S3)**
+  Files are uploaded and stored securely with controlled access.
 
-   Open your terminal and run the following command:
+* 🔍 **Semantic Search with Pinecone**
+  Fast and relevant document chunk retrieval using vector embeddings.
 
-   ```bash
-   git clone https://github.com/Elliott-Chong/chatpdf-yt.git
-   ```
+* 🔐 **Authentication with Clerk**
+  Secure sign-in, sign-up, and user session management.
 
-2. **Navigate to the project directory**
+* 💳 **Stripe Payments (Planned / Integrated)**
+  Ready for subscription-based monetization.
 
-   ```bash
-   cd chatpdf-yt
-   ```
+* ⚡ **Modern UI & UX**
+  Built with Next.js App Router, Tailwind CSS, and responsive design.
 
-3. **Install Node.js**
+---
 
-   The project requires Node.js version 13.4.19 or later. You can download it from [here](https://nodejs.org/en/download/).
+## 🧱 Tech Stack
 
-4. **Install the required dependencies**
+**Frontend**
 
-   Run the following command to install all the required dependencies:
+* Next.js 14 (App Router)
+* TypeScript
+* Tailwind CSS
 
-   ```bash
-   npm install
-   ```
+**Backend & Services**
 
-   This will install all the dependencies listed in the `package.json` file, including Next.js, React, React DOM, Axios, Stripe, Tailwind CSS, and other specific dependencies such as "@aws-sdk/client-s3" and "@clerk/nextjs".
+* Node.js
+* PostgreSQL (Neon)
+* AWS S3 (File Storage)
+* OpenAI (LLMs)
+* Pinecone (Vector Database)
+* Clerk (Authentication)
+* Stripe (Payments)
 
-5. **Setup environment variables**
+---
 
-    Create a `.env` file in the root directory of your project and add the required environment variables.
+## 🏗️ Architecture Overview
 
-6. **Run the project**
+1. User uploads a PDF
+2. PDF is stored securely in AWS S3
+3. Content is chunked and embedded
+4. Embeddings are stored in Pinecone
+5. User asks questions
+6. Relevant chunks are retrieved
+7. AI generates accurate, contextual answers
 
-    Now, you can run the project using the following command:
+---
 
-    ```bash
-    npm run dev
-    ```
+## 🔐 Security First
 
-    Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+* ✅ Secrets managed via environment variables
+* ✅ `.env` files are gitignored
+* ✅ `.env.example` contains placeholders only
+* ✅ No API keys exposed to the client
+* ✅ GitHub Push Protection compliant
 
+> Security mistakes early in projects were intentionally fixed to follow real-world best practices.
 
+---
+
+## 📁 Environment Setup
+
+Create a `.env` file locally:
+
+```env
+DATABASE_URL=your_database_url
+CLERK_SECRET_KEY=your_clerk_secret
+OPENAI_API_KEY=your_openai_key
+PINECONE_API_KEY=your_pinecone_key
+AWS_ACCESS_KEY_ID=your_aws_key
+AWS_SECRET_ACCESS_KEY=your_aws_secret
+S3_BUCKET_NAME=your_bucket_name
+```
+
+Refer to `.env.example` for the full list.
+
+---
+
+## ▶️ Getting Started
+
+```bash
+# Install dependencies
+npm install
+
+# Run development server
+npm run dev
+```
+
+App runs on:
+👉 `http://localhost:3000`
+
+---
+
+## 🧪 Project Status
+
+* ✅ Core PDF chat functionality complete
+* ✅ Authentication & storage implemented
+* 🚧 Subscription logic (Stripe) in progress
+* 🚧 Performance & UX improvements ongoing
+
+---
+
+## 🌟 Why DocuDialog?
+
+This project demonstrates:
+
+* Real-world SaaS architecture
+* Secure credential handling
+* AI + vector database integration
+* Clean Git workflow & commit history
+* Production-focused mindset
+
+It’s not just a demo — it’s a **scalable foundation**.
+
+---
+
+## 🤝 Contributing
+
+Contributions, issues, and feature requests are welcome.
+Feel free to open a PR or start a discussion.
+
+---
+
+## 📬 Contact
+
+Built with ❤️ by **IB**
+🔗 LinkedIn: [https://www.linkedin.com/in/ikrambanadarwebdev](https://www.linkedin.com/in/ikrambanadarwebdev)
+
+---
+
+> *“Turn documents into conversations.”*
