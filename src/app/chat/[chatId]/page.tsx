@@ -16,37 +16,54 @@ type Props = {
 };
 
 const ChatPage = async ({ params: { chatId } }: Props) => {
+  // ─── Auth ────────────────────────────────────────────────────────────────
   const { userId } = await auth();
-  if (!userId) {
-    return redirect("/sign-in");
-  }
-  const _chats = await db.select().from(chats).where(eq(chats.userId, userId));
-  if (!_chats) {
-    return redirect("/");
-  }
-  if (!_chats.find((chat) => chat.id === parseInt(chatId))) {
-    return redirect("/");
-  }
+  if (!userId) redirect("/sign-in");
 
-  const currentChat = _chats.find((chat) => chat.id === parseInt(chatId));
+  // ─── Validate chatId ─────────────────────────────────────────────────────
+  const parsedChatId = parseInt(chatId);
+  if (isNaN(parsedChatId)) redirect("/");
+
+  // ─── Fetch user's chats ───────────────────────────────────────────────────
+  const _chats = await db
+    .select()
+    .from(chats)
+    .where(eq(chats.userId, userId))
+    .orderBy(chats.createdAt);
+
+  if (!_chats || _chats.length === 0) redirect("/");
+
+  // ─── Verify chat belongs to user ─────────────────────────────────────────
+  const currentChat = _chats.find((chat) => chat.id === parsedChatId);
+  if (!currentChat) redirect("/");
+
+  // ─── Subscription ─────────────────────────────────────────────────────────
   const isPro = await checkSubscription();
 
   return (
-    <div className="flex max-h-screen overflow-scroll">
-      <div className="flex w-full max-h-screen overflow-scroll">
-        {/* chat sidebar */}
-        <div className="flex-[1] max-w-xs">
-          <ChatSideBar chats={_chats} chatId={parseInt(chatId)} isPro={isPro} />
-        </div>
-        {/* pdf viewer */}
-        <div className="max-h-screen p-4 oveflow-scroll flex-[5]">
-          <PDFViewer pdf_url={currentChat?.pdfUrl || ""} />
-        </div>
-        {/* chat component */}
-        <div className="flex-[3] border-l-4 border-l-slate-200">
-          <ChatComponent chatId={parseInt(chatId)} />
-        </div>
-      </div>
+    <div className="flex h-screen bg-gray-950 text-white overflow-hidden">
+
+      {/* Sidebar */}
+      <aside className="w-72 flex-shrink-0 border-r border-gray-800 overflow-y-auto">
+        <ChatSideBar chats={_chats} chatId={parsedChatId} isPro={isPro} />
+      </aside>
+
+      {/* PDF Viewer */}
+      <main className="flex-[5] overflow-hidden border-r border-gray-800">
+        {currentChat.pdfUrl ? (
+          <PDFViewer pdf_url={currentChat.pdfUrl} />
+        ) : (
+          <div className="flex items-center justify-center h-full text-gray-500">
+            <p>No PDF available for this chat.</p>
+          </div>
+        )}
+      </main>
+
+      {/* Chat */}
+      <section className="flex-[3] overflow-hidden">
+        <ChatComponent chatId={parsedChatId} />
+      </section>
+
     </div>
   );
 };
