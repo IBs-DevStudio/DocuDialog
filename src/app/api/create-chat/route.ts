@@ -6,64 +6,74 @@ import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
 // /api/create-chat
-export async function POST(req: Request, res: Response) {
+export async function POST(req: Request) {
   const { userId } = await auth();
+
   if (!userId) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
   try {
     const body = await req.json();
     const { file_key, file_name } = body;
-    console.log("create-chat payload:", { file_key, file_name });
 
     // Validate inputs
-    if (!file_key || !file_name) {
-      return NextResponse.json(
-        { error: "file_key and file_name are required" },
-        { status: 400 }
-      );
+    if (!file_key || typeof file_key !== "string" || file_key.trim() === "") {
+      return NextResponse.json({ error: "Invalid or missing file_key" }, { status: 400 });
+    }
+    if (!file_name || typeof file_name !== "string" || file_name.trim() === "") {
+      return NextResponse.json({ error: "Invalid or missing file_name" }, { status: 400 });
     }
 
-    // Basic env presence checks (no secrets logged)
-    const missing = [
+    // Check required env vars
+    const requiredEnvs = [
       "DATABASE_URL",
       "S3_ACCESS_KEY_ID",
       "S3_SECRET_ACCESS_KEY",
       "S3_BUCKET_NAME",
       "PINECONE_API_KEY",
-      "PINECONE_ENVIRONMENT",
-      // Using OpenRouter now; keep OPENAI_API_KEY optional
       "OPENROUTER_API_KEY",
-    ].filter((k) => !process.env[k]);
+    ];
+    const missing = requiredEnvs.filter((k) => !process.env[k]);
     if (missing.length) {
-      console.error("Missing envs:", missing);
+      console.error("[create-chat] Missing environment variables:", missing);
+      return NextResponse.json(
+        { error: "Server misconfiguration. Please contact support." },
+        { status: 500 }
+      );
     }
 
+    // Load PDF into Pinecone
+    console.log("[create-chat] Loading into Pinecone:", file_key);
     await loadS3IntoPinecone(file_key);
+    console.log("[create-chat] Pinecone load complete");
 
-    const chat_id = await db
+    // Insert chat into DB
+    const pdfUrl = getS3Url(file_key);
+    const result = await db
       .insert(chats)
       .values({
-        fileKey: file_key,
-        pdfName: file_name,
-        pdfUrl: getS3Url(file_key),
+        fileKey: file_key.trim(),
+        pdfName: file_name.trim(),
+        pdfUrl,
         userId,
+        createdAt: new Date(),
       })
-      .returning({
-        insertedId: chats.id,
-      });
+      .returning({ insertedId: chats.id });
 
-    return NextResponse.json(
-      {
-        chat_id: chat_id[0].insertedId,
-      },
-      { status: 200 }
-    );
+    const chat_id = result[0]?.insertedId;
+
+    if (!chat_id) {
+      console.error("[create-chat] DB insert returned no ID");
+      return NextResponse.json({ error: "Failed to create chat" }, { status: 500 });
+    }
+
+    console.log("[create-chat] Chat created successfully:", chat_id);
+
+    return NextResponse.json({ chat_id }, { status: 201 });
+
   } catch (error: any) {
-    console.error("/api/create-chat error:", error?.message || error, error?.stack);
-    return NextResponse.json(
-      { error: "internal server error" },
-      { status: 500 }
-    );
+    console.error("[create-chat] Unexpected error:", error?.message || error);
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }
