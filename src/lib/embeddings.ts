@@ -10,27 +10,27 @@ function getRequiredEnv(key: string): string {
   return value;
 }
 
+
 export async function getEmbeddings(text: string): Promise<number[]> {
-  // Validate input
-  if (!text || typeof text !== "string") {
-    throw new Error("Invalid input: text must be a non-empty string.");
+  if (typeof text !== "string" || !text.trim()) {
+    throw new Error("Input must be a non-empty string");
   }
 
-  // Sanitize + truncate
-  const sanitized = text.replace(/\n+/g, " ").replace(/\s+/g, " ").trim();
-  const truncated = sanitized.slice(0, MAX_INPUT_LENGTH);
-
-  if (truncated.length < sanitized.length) {
-    console.warn(`[embeddings] Input truncated from ${sanitized.length} to ${MAX_INPUT_LENGTH} chars`);
-  }
+  const sanitized = sanitizeText(text);
+  const truncated = truncateText(
+    sanitized,
+    OPENROUTER_CONFIG.MAX_INPUT_LENGTH
+  );
 
   const apiKey = getRequiredEnv("OPENROUTER_API_KEY");
-  const model = process.env.OPENROUTER_EMBED_MODEL || DEFAULT_EMBED_MODEL;
+  const model =
+    process.env.OPENROUTER_EMBED_MODEL ||
+    OPENROUTER_CONFIG.DEFAULT_MODEL;
 
-  let resp: Response;
+  let response: Response;
 
   try {
-    resp = await fetch(OPENROUTER_BASE_URL, {
+    response = await fetch(OPENROUTER_CONFIG.BASE_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -43,30 +43,40 @@ export async function getEmbeddings(text: string): Promise<number[]> {
         input: truncated,
       }),
     });
-  } catch (networkError: any) {
-    console.error("[embeddings] Network error:", networkError?.message);
-    throw new Error("Failed to reach OpenRouter API. Check your internet connection.");
+  } catch (err: any) {
+    console.error("[embeddings] Network failure:", err?.message || err);
+    throw new Error("Network error while calling OpenRouter");
   }
 
-  if (!resp.ok) {
-    const errorBody = await resp.text();
-    console.error(`[embeddings] API error ${resp.status}:`, errorBody);
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error(`[embeddings] API error ${response.status}:`, errorText);
 
-    if (resp.status === 401) throw new Error("Invalid OpenRouter API key.");
-    if (resp.status === 429) throw new Error("OpenRouter rate limit exceeded. Try again later.");
-    if (resp.status >= 500) throw new Error("OpenRouter server error. Try again later.");
-
-    throw new Error(`OpenRouter embeddings failed: ${resp.status}`);
+    switch (response.status) {
+      case 401:
+        throw new Error("Unauthorized: Invalid OpenRouter API key");
+      case 429:
+        throw new Error("Rate limit exceeded. Please retry later");
+      case 500:
+      case 502:
+      case 503:
+        throw new Error("OpenRouter server error");
+      default:
+        throw new Error(`Embedding request failed (${response.status})`);
+    }
   }
 
-  const json = await resp.json();
-  const embedding = json.data?.[0]?.embedding;
+  const json = await response.json();
+  const embedding = json?.data?.[0]?.embedding;
 
   if (!Array.isArray(embedding) || embedding.length === 0) {
-    console.error("[embeddings] Unexpected response shape:", JSON.stringify(json));
-    throw new Error("Invalid embedding response from OpenRouter.");
+    console.error("[embeddings] Invalid response:", JSON.stringify(json));
+    throw new Error("Malformed embedding response");
   }
 
-  console.log(`[embeddings] Success — model: ${model}, dims: ${embedding.length}`);
+  console.log(
+    `[embeddings] Generated embedding → model: ${model}, dimensions: ${embedding.length}`
+  );
+
   return embedding;
 }
