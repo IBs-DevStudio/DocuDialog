@@ -1,6 +1,10 @@
-const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1/embeddings";
-const DEFAULT_EMBED_MODEL = "openai/text-embedding-3-small";
-const MAX_INPUT_LENGTH = 8000; // safe token limit
+const OPENROUTER_CONFIG = {
+  BASE_URL: "https://openrouter.ai/api/v1/embeddings",
+  DEFAULT_MODEL: "openai/text-embedding-3-small",
+  MAX_INPUT_LENGTH: 8000,
+};
+
+// ─── Env Helper ──────────────────────────────────────────────────────────────
 
 function getRequiredEnv(key: string): string {
   const value = process.env[key];
@@ -10,6 +14,22 @@ function getRequiredEnv(key: string): string {
   return value;
 }
 
+// ─── Text Helpers ────────────────────────────────────────────────────────────
+
+function sanitizeText(text: string): string {
+  return text.replace(/\n+/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function truncateText(text: string, maxLength: number): string {
+  if (text.length <= maxLength) return text;
+
+  console.warn(
+    `[embeddings] Truncating input from ${text.length} → ${maxLength}`
+  );
+  return text.slice(0, maxLength);
+}
+
+// ─── Main Function ───────────────────────────────────────────────────────────
 
 export async function getEmbeddings(text: string): Promise<number[]> {
   if (typeof text !== "string" || !text.trim()) {
