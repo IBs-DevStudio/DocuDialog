@@ -2,10 +2,14 @@ import { Pinecone } from "@pinecone-database/pinecone";
 import { convertToAscii } from "./utils";
 import { getEmbeddings } from "./embeddings";
 
-const PINECONE_INDEX = process.env.PINECONE_INDEX || "docudialog";
-const TOP_K = 5;
-const SIMILARITY_THRESHOLD = 0.7;
-const MAX_CONTEXT_LENGTH = 3000;
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+const CONFIG = {
+  INDEX: process.env.PINECONE_INDEX || "docudialog",
+  TOP_K: 5,
+  SIMILARITY_THRESHOLD: 0.7,
+  MAX_CONTEXT_LENGTH: 3000,
+};
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -27,12 +31,32 @@ let pineconeClient: Pinecone | null = null;
 function getPineconeClient(): Pinecone {
   if (pineconeClient) return pineconeClient;
 
-  if (!process.env.PINECONE_API_KEY) {
-    throw new Error("Missing required environment variable: PINECONE_API_KEY");
+  const apiKey = process.env.PINECONE_API_KEY;
+  if (!apiKey) {
+    throw new Error("Missing PINECONE_API_KEY");
   }
 
-  pineconeClient = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });
+  pineconeClient = new Pinecone({ apiKey });
   return pineconeClient;
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function isValidEmbeddings(embeddings: number[]): boolean {
+  return Array.isArray(embeddings) && embeddings.length > 0;
+}
+
+function formatMatches(matches: any[]): ContextMatch[] {
+  return matches
+    .filter((m) => m?.metadata && typeof m.score === "number")
+    .map((m) => {
+      const metadata = m.metadata as Metadata;
+      return {
+        text: metadata.text,
+        pageNumber: metadata.pageNumber,
+        score: m.score,
+      };
+    });
 }
 
 // ─── Get Matches ─────────────────────────────────────────────────────────────
@@ -41,38 +65,32 @@ export async function getMatchesFromEmbeddings(
   embeddings: number[],
   fileKey: string
 ): Promise<ContextMatch[]> {
-  if (!Array.isArray(embeddings) || embeddings.length === 0) {
-    throw new Error("Invalid embeddings: must be a non-empty array");
+  if (!isValidEmbeddings(embeddings)) {
+    throw new Error("Embeddings must be a non-empty array");
   }
+
   if (!fileKey || typeof fileKey !== "string") {
-    throw new Error("Invalid fileKey provided");
+    throw new Error("Invalid fileKey");
   }
 
   try {
     const client = getPineconeClient();
-    const pineconeIndex = client.index(PINECONE_INDEX);
-    const namespace = pineconeIndex.namespace(convertToAscii(fileKey));
+    const namespace = client
+      .index(CONFIG.INDEX)
+      .namespace(convertToAscii(fileKey));
 
-    const queryResult = await namespace.query({
-      topK: TOP_K,
+    const { matches = [] } = await namespace.query({
+      topK: CONFIG.TOP_K,
       vector: embeddings,
       includeMetadata: true,
     });
 
-    const matches = queryResult.matches || [];
-    console.log(`[context] Found ${matches.length} matches for fileKey: ${fileKey}`);
+    console.log(`[context] Retrieved ${matches.length} raw matches`);
 
-    return matches
-      .filter((match) => match.metadata && match.score !== undefined)
-      .map((match) => ({
-        text: (match.metadata as Metadata).text,
-        pageNumber: (match.metadata as Metadata).pageNumber,
-        score: match.score!,
-      }));
-
-  } catch (error: any) {
-    console.error("[context] Error querying Pinecone:", error?.message);
-    throw new Error("Failed to query Pinecone. Please try again.");
+    return formatMatches(matches);
+  } catch (err: any) {
+    console.error("[context] Pinecone query failed:", err?.message || err);
+    throw new Error("Pinecone query failed");
   }
 }
 
@@ -82,38 +100,40 @@ export async function getContext(
   query: string,
   fileKey: string
 ): Promise<string> {
-  if (!query || typeof query !== "string" || query.trim() === "") {
-    throw new Error("Invalid query: must be a non-empty string");
+  if (!query?.trim()) {
+    throw new Error("Query must be a non-empty string");
   }
 
-  console.log(`[context] Getting context for query: "${query.slice(0, 60)}..."`);
+  console.log(`[context] Processing query → "${query.slice(0, 50)}..."`);
 
-  const queryEmbeddings = await getEmbeddings(query);
-  const matches = await getMatchesFromEmbeddings(queryEmbeddings, fileKey);
+  const embeddings = await getEmbeddings(query);
+  const matches = await getMatchesFromEmbeddings(embeddings, fileKey);
 
-  // Filter by similarity threshold
-  const qualifyingDocs = matches.filter(
-    (match) => match.score >= SIMILARITY_THRESHOLD
+  const filtered = matches.filter(
+    (m) => m.score >= CONFIG.SIMILARITY_THRESHOLD
   );
 
-  if (qualifyingDocs.length === 0) {
-    console.warn(`[context] No matches above threshold ${SIMILARITY_THRESHOLD} for query: "${query.slice(0, 60)}"`);
+  if (!filtered.length) {
+    console.warn("[context] No relevant matches found");
     return "";
   }
 
-  // Sort by score descending — best matches first
-  const sorted = qualifyingDocs.sort((a, b) => b.score - a.score);
+  const sorted = filtered.sort((a, b) => b.score - a.score);
 
-  // Log match quality
-  sorted.forEach((doc, i) => {
-    console.log(`[context] Match ${i + 1}: page ${doc.pageNumber}, score ${doc.score.toFixed(3)}`);
+  sorted.forEach((doc, idx) => {
+    console.log(
+      `[context] #${idx + 1} → page ${doc.pageNumber}, score ${doc.score.toFixed(
+        3
+      )}`
+    );
   });
 
   const context = sorted
-    .map((doc) => doc.text)
+    .map((d) => d.text)
     .join("\n")
-    .substring(0, MAX_CONTEXT_LENGTH);
+    .slice(0, CONFIG.MAX_CONTEXT_LENGTH);
 
-  console.log(`[context] Returning ${context.length} chars of context`);
+  console.log(`[context] Final context length: ${context.length}`);
+
   return context;
 }
