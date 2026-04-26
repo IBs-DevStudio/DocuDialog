@@ -1,4 +1,3 @@
-// STRIPE DISABLED - TO BE ENABLED LATER
 "use client";
 import React from "react";
 import { Button } from "./ui/button";
@@ -6,29 +5,43 @@ import { Button } from "./ui/button";
 
 type Props = { isPro: boolean };
 
-const SubscriptionButton = (props: Props) => {
-  // const [loading, setLoading] = React.useState(false);
-  // const handleSubscription = async () => {
-  //   try {
-  //     setLoading(true);
-  //     const response = await axios.get("/api/stripe");
-  //     window.location.href = response.data.url;
-  //   } catch (error) {
-  //     console.error(error);
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
-  
-  // TEMPORARY: Hide subscription button when Stripe is disabled
-  return null;
-  
-  // ORIGINAL CODE - COMMENTED OUT FOR NOW
-  // return (
-  //   <Button disabled={loading} onClick={handleSubscription} variant="outline">
-  //     {props.isPro ? "Manage Subscriptions" : "Get Pro"}
-  //   </Button>
-  // );
+const STRIPE_ENABLED = false;
+
+const SubscriptionButton = ({ isPro }: Props) => {
+  const [loading, setLoading] = React.useState(false);
+
+  const handleSubscription = async () => {
+    if (!STRIPE_ENABLED) {
+      console.warn("[subscription] Stripe is currently disabled");
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      // const response = await axios.get("/api/stripe");
+      // window.location.href = response.data.url;
+
+    } catch (error) {
+      console.error("[subscription] Error:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Button
+      disabled={!STRIPE_ENABLED || loading}
+      onClick={handleSubscription}
+      variant="outline"
+    >
+      {STRIPE_ENABLED
+        ? isPro
+          ? "Manage Subscription"
+          : "Upgrade to Pro"
+        : "Coming Soon"}
+    </Button>
+  );
 };
 
 export default SubscriptionButton;
