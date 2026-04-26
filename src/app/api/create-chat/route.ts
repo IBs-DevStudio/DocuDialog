@@ -5,7 +5,25 @@ import { getS3Url } from "@/lib/s3";
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 
-// /api/create-chat
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function validateString(value: unknown, field: string): string {
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new Error(`Invalid ${field}`);
+  }
+  return value.trim();
+}
+
+function checkEnvVars(keys: string[]) {
+  const missing = keys.filter((k) => !process.env[k]);
+  if (missing.length) {
+    console.error("[create-chat] Missing env:", missing);
+    throw new Error("Server misconfiguration");
+  }
+}
+
+// ─── Route Handler ───────────────────────────────────────────────────────────
+
 export async function POST(req: Request) {
   const { userId } = await auth();
 
@@ -15,65 +33,69 @@ export async function POST(req: Request) {
 
   try {
     const body = await req.json();
-    const { file_key, file_name } = body;
 
-    // Validate inputs
-    if (!file_key || typeof file_key !== "string" || file_key.trim() === "") {
-      return NextResponse.json({ error: "Invalid or missing file_key" }, { status: 400 });
-    }
-    if (!file_name || typeof file_name !== "string" || file_name.trim() === "") {
-      return NextResponse.json({ error: "Invalid or missing file_name" }, { status: 400 });
-    }
+    const fileKey = validateString(body.file_key, "file_key");
+    const fileName = validateString(body.file_name, "file_name");
 
-    // Check required env vars
-    const requiredEnvs = [
+    checkEnvVars([
       "DATABASE_URL",
       "S3_ACCESS_KEY_ID",
       "S3_SECRET_ACCESS_KEY",
       "S3_BUCKET_NAME",
       "PINECONE_API_KEY",
       "OPENROUTER_API_KEY",
-    ];
-    const missing = requiredEnvs.filter((k) => !process.env[k]);
-    if (missing.length) {
-      console.error("[create-chat] Missing environment variables:", missing);
-      return NextResponse.json(
-        { error: "Server misconfiguration. Please contact support." },
-        { status: 500 }
-      );
-    }
+    ]);
 
-    // Load PDF into Pinecone
-    console.log("[create-chat] Loading into Pinecone:", file_key);
-    await loadS3IntoPinecone(file_key);
-    console.log("[create-chat] Pinecone load complete");
+    console.log("[create-chat] Processing file:", fileKey);
 
-    // Insert chat into DB
-    const pdfUrl = getS3Url(file_key);
-    const result = await db
+    // ─── Load into Pinecone ───────────────────────────────────────────────────
+
+    await loadS3IntoPinecone(fileKey);
+    console.log("[create-chat] Pinecone indexing complete");
+
+    // ─── DB Insert ────────────────────────────────────────────────────────────
+
+    const pdfUrl = getS3Url(fileKey);
+
+    const [inserted] = await db
       .insert(chats)
       .values({
-        fileKey: file_key.trim(),
-        pdfName: file_name.trim(),
+        fileKey,
+        pdfName: fileName,
         pdfUrl,
         userId,
         createdAt: new Date(),
       })
-      .returning({ insertedId: chats.id });
+      .returning({ id: chats.id });
 
-    const chat_id = result[0]?.insertedId;
-
-    if (!chat_id) {
-      console.error("[create-chat] DB insert returned no ID");
-      return NextResponse.json({ error: "Failed to create chat" }, { status: 500 });
+    if (!inserted?.id) {
+      throw new Error("Database insert failed");
     }
 
-    console.log("[create-chat] Chat created successfully:", chat_id);
+    console.log("[create-chat] Chat created:", inserted.id);
 
-    return NextResponse.json({ chat_id }, { status: 201 });
+    return NextResponse.json(
+      { chat_id: inserted.id },
+      { status: 201 }
+    );
 
-  } catch (error: any) {
-    console.error("[create-chat] Unexpected error:", error?.message || error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+  } catch (err: any) {
+    console.error("[create-chat] Error:", err?.message || err);
+
+    if (err.message?.includes("Invalid")) {
+      return NextResponse.json({ error: err.message }, { status: 400 });
+    }
+
+    if (err.message === "Server misconfiguration") {
+      return NextResponse.json(
+        { error: "Server configuration error" },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
   }
 }
