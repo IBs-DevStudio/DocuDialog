@@ -5,14 +5,15 @@ import { Button } from "./ui/button";
 
 type Props = { isPro: boolean };
 
-const STRIPE_ENABLED = false;
+const STRIPE_ENABLED =
+  process.env.NEXT_PUBLIC_STRIPE_ENABLED === "true";
 
 const SubscriptionButton = ({ isPro }: Props) => {
   const [loading, setLoading] = React.useState(false);
 
   const handleSubscription = async () => {
     if (!STRIPE_ENABLED) {
-      console.warn("[subscription] Stripe is currently disabled");
+      console.warn("[subscription] Stripe is disabled");
       return;
     }
 
@@ -23,11 +24,19 @@ const SubscriptionButton = ({ isPro }: Props) => {
       // window.location.href = response.data.url;
 
     } catch (error) {
-      console.error("[subscription] Error:", error);
+      console.error("[subscription] Failed:", error);
     } finally {
       setLoading(false);
     }
   };
+
+  const label = loading
+    ? "Redirecting..."
+    : STRIPE_ENABLED
+    ? isPro
+      ? "Manage Subscription"
+      : "Upgrade to Pro"
+    : "Coming Soon";
 
   return (
     <Button
@@ -35,11 +44,7 @@ const SubscriptionButton = ({ isPro }: Props) => {
       onClick={handleSubscription}
       variant="outline"
     >
-      {STRIPE_ENABLED
-        ? isPro
-          ? "Manage Subscription"
-          : "Upgrade to Pro"
-        : "Coming Soon"}
+      {label}
     </Button>
   );
 };
