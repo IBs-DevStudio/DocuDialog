@@ -8,35 +8,46 @@ type Props = {
   messages: Message[];
 };
 
-const MessageList = ({ messages, isLoading }: Props) => {
+const MessageList = ({ messages = [], isLoading }: Props) => {
   if (isLoading) {
     return (
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+      <div className="flex items-center justify-center h-full">
         <Loader2 className="w-6 h-6 animate-spin" />
       </div>
     );
   }
-  if (!messages) return <></>;
+
+  if (messages.length === 0) {
+    return (
+      <div className="text-center text-sm text-gray-500 mt-4">
+        No messages yet. Start the conversation 👋
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-col gap-2 px-4">
+    <div className="flex flex-col gap-3 px-4 py-2">
       {messages.map((message) => {
+        const isUser = message.role === "user";
+
         return (
           <div
             key={message.id}
             className={cn("flex", {
-              "justify-end pl-10": message.role === "user",
-              "justify-start pr-10": message.role === "assistant",
+              "justify-end pl-10": isUser,
+              "justify-start pr-10": !isUser,
             })}
           >
             <div
               className={cn(
-                "rounded-lg px-3 text-sm py-1 shadow-md ring-1 ring-gray-900/10",
+                "rounded-xl px-3 py-2 text-sm shadow-sm ring-1 ring-gray-900/10 max-w-[80%] break-words",
                 {
-                  "bg-blue-600 text-white": message.role === "user",
+                  "bg-blue-600 text-white": isUser,
+                  "bg-gray-100 text-gray-900": !isUser,
                 }
               )}
             >
-              <p>{message.content}</p>
+              <p className="whitespace-pre-wrap">{message.content}</p>
             </div>
           </div>
         );
