@@ -1,69 +1,98 @@
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
-// Create S3 client once (not on every upload)
-const s3Client = new S3Client({
-  region: process.env.NEXT_PUBLIC_S3_REGION || "ap-south-1",
-  credentials: {
-    accessKeyId: process.env.NEXT_PUBLIC_S3_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.NEXT_PUBLIC_S3_SECRET_ACCESS_KEY!,
-  },
-});
+// ─── Config ──────────────────────────────────────────────────────────────────
+
+function getS3Config() {
+  const region = process.env.S3_REGION || "ap-south-1";
+  const bucket = process.env.S3_BUCKET_NAME;
+  const accessKeyId = process.env.S3_ACCESS_KEY_ID;
+  const secretAccessKey = process.env.S3_SECRET_ACCESS_KEY;
+
+  if (!bucket || !accessKeyId || !secretAccessKey) {
+    throw new Error("Missing S3 configuration");
+  }
+
+  return { region, bucket, accessKeyId, secretAccessKey };
+}
+
+// ─── Client (singleton) ──────────────────────────────────────────────────────
+
+let s3Client: S3Client | null = null;
+
+function getS3Client(): S3Client {
+  if (s3Client) return s3Client;
+
+  const { region, accessKeyId, secretAccessKey } = getS3Config();
+
+  s3Client = new S3Client({
+    region,
+    credentials: { accessKeyId, secretAccessKey },
+  });
+
+  return s3Client;
+}
+
+// ─── Constants ───────────────────────────────────────────────────────────────
 
 const ALLOWED_TYPES = ["application/pdf"];
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function sanitizeFileName(name: string): string {
+  return name.replace(/\s+/g, "-").replace(/[^a-zA-Z0-9._-]/g, "");
+}
+
+// ─── Upload ──────────────────────────────────────────────────────────────────
+
 export async function uploadToS3(
   file: File
 ): Promise<{ file_key: string; file_name: string }> {
-  // Validate file type
+  if (!file || !(file instanceof File)) {
+    throw new Error("Invalid file input");
+  }
+
   if (!ALLOWED_TYPES.includes(file.type)) {
-    throw new Error(`Invalid file type: ${file.type}. Only PDF is allowed.`);
+    throw new Error(`Unsupported file type: ${file.type}`);
   }
 
-  // Validate file size
   if (file.size > MAX_FILE_SIZE) {
-    throw new Error(`File too large. Max size is 10MB.`);
+    throw new Error("File exceeds 10MB limit");
   }
 
-  // Sanitize file name — replace all spaces and special chars
-  const sanitizedName = file.name
-    .replace(/\s+/g, "-")
-    .replace(/[^a-zA-Z0-9._-]/g, "");
+  const sanitizedName = sanitizeFileName(file.name);
+  const fileKey = `uploads/${Date.now()}-${sanitizedName}`;
 
-  const file_key = `uploads/${Date.now()}-${sanitizedName}`;
+  const buffer = Buffer.from(await file.arrayBuffer());
 
-  const arrayBuffer = await file.arrayBuffer();
-  const fileBuffer = Buffer.from(arrayBuffer);
-
-  const params = {
-    Bucket: process.env.NEXT_PUBLIC_S3_BUCKET_NAME!,
-    Key: file_key,
-    Body: fileBuffer,
-    ContentType: file.type,
-    ContentDisposition: `inline; filename="${sanitizedName}"`,
-  };
+  const { bucket } = getS3Config();
 
   try {
-    await s3Client.send(new PutObjectCommand(params));
-    console.log("[s3] Upload successful:", file_key);
+    await getS3Client().send(
+      new PutObjectCommand({
+        Bucket: bucket,
+        Key: fileKey,
+        Body: buffer,
+        ContentType: file.type,
+        ContentDisposition: `inline; filename="${sanitizedName}"`,
+      })
+    );
+
+    console.log("[s3] Upload success:", fileKey);
 
     return {
-      file_key,
+      file_key: fileKey,
       file_name: file.name,
     };
-  } catch (error: any) {
-    console.error("[s3] Upload failed:", error?.message || error);
-    throw new Error("Failed to upload file to S3. Please try again.");
+  } catch (err: any) {
+    console.error("[s3] Upload error:", err?.message || err);
+    throw new Error("S3 upload failed");
   }
 }
 
-export function getS3Url(file_key: string): string {
-  const bucket = process.env.NEXT_PUBLIC_S3_BUCKET_NAME;
-  const region = process.env.NEXT_PUBLIC_S3_REGION || "ap-south-1";
+// ─── URL Helper ──────────────────────────────────────────────────────────────
 
-  if (!bucket) {
-    throw new Error("S3 bucket name is not configured.");
-  }
-
-  return `https://${bucket}.s3.${region}.amazonaws.com/${file_key}`;
+export function getS3Url(fileKey: string): string {
+  const { bucket, region } = getS3Config();
+  return `https://${bucket}.s3.${region}.amazonaws.com/${fileKey}`;
 }
